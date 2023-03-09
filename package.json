@@ -1,9 +1,9 @@
 {
   "name": "query-selector-ponyfill",
-  "version": "1.0.2",
+  "version": "1.0.4",
   "description": "use querySelector syntax to search for nodes inside of (nested) shadow roots",
-  "main": "src/query-selector-ponyfill.js",
-  "types": "dist",
+  "main": "dist/query-selector-ponyfill.js",
+  "types": "dist/query-selector-ponyfill.d.ts",
   "scripts": {
     "prepublishOnly": "npm run build",
     "prebuild": "npm run lint",
