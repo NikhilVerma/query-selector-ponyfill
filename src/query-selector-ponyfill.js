@@ -173,7 +173,7 @@ function findParentOrHost(element, root) {
  * @author ebidel@ (Eric Bidelman)
  * License Apache-2.0
  */
-export function collectAllElementsDeep(selector = null, root, cachedElements = null) {
+function collectAllElementsDeep(selector = null, root, cachedElements = null) {
     let allElements = [];
 
     if (cachedElements) {
