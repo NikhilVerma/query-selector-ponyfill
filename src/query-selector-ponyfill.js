@@ -14,17 +14,36 @@ import { normalizeSelector } from './normalize';
 * Another example querySelectorAllDeep('#downloads-list div#title-area + a');
 e.g.
 */
-export function querySelectorAllDeep(selector, root = document, allElements = null) {
-    return _querySelectorDeep(selector, true, root, allElements);
-}
 
-export function querySelectorDeep(selector, root = document, allElements = null) {
-    return _querySelectorDeep(selector, false, root, allElements);
-}
+/**
+ * Query selector overrides
+ */
+Document.prototype.querySelectorNative = Document.prototype.querySelector;
+DocumentFragment.prototype.querySelectorNative = DocumentFragment.prototype.querySelector;
+HTMLElement.prototype.querySelectorNative = HTMLElement.prototype.querySelector;
+Document.prototype.querySelector =
+    HTMLElement.prototype.querySelector =
+    DocumentFragment.prototype.querySelector =
+        function querySelectorDeep(selector) {
+            return _querySelectorDeep(selector, false, this);
+        };
+
+/**
+ * Query selector all overrides
+ */
+Document.prototype.querySelectorAllNative = Document.prototype.querySelectorAll;
+DocumentFragment.prototype.querySelectorAllNative = DocumentFragment.prototype.querySelectorAll;
+HTMLElement.prototype.querySelectorAllNative = HTMLElement.prototype.querySelectorAll;
+Document.prototype.querySelectorAll =
+    HTMLElement.prototype.querySelectorAll =
+    DocumentFragment.prototype.querySelectorAll =
+        function querySelectorAllDeep(selector) {
+            return _querySelectorDeep(selector, true, this);
+        };
 
 function _querySelectorDeep(selector, findMany, root, allElements = null) {
     selector = normalizeSelector(selector);
-    let lightElement = root.querySelector(selector);
+    let lightElement = root.querySelectorNative(selector);
 
     if (document.head.createShadowRoot || document.head.attachShadow) {
         // no need to do any special if selector matches something specific in light-dom
@@ -35,43 +54,46 @@ function _querySelectorDeep(selector, findMany, root, allElements = null) {
         // split on commas because those are a logical divide in the operation
         const selectionsToMake = splitByCharacterUnlessQuoted(selector, ',');
 
-        return selectionsToMake.reduce((acc, minimalSelector) => {
-            // if not finding many just reduce the first match
-            if (!findMany && acc) {
-                return acc;
-            }
-            // do best to support complex selectors and split the query
-            const splitSelector = splitByCharacterUnlessQuoted(minimalSelector
-                    //remove white space at start of selector
-                    .replace(/^\s+/g, '')
-                    .replace(/\s*([>+~]+)\s*/g, '$1'), ' ')
+        return selectionsToMake.reduce(
+            (acc, minimalSelector) => {
+                // if not finding many just reduce the first match
+                if (!findMany && acc) {
+                    return acc;
+                }
+                // do best to support complex selectors and split the query
+                const splitSelector = splitByCharacterUnlessQuoted(
+                    minimalSelector
+                        //remove white space at start of selector
+                        .replace(/^\s+/g, '')
+                        .replace(/\s*([>+~]+)\s*/g, '$1'),
+                    ' '
+                )
                     // filter out entry white selectors
                     .filter((entry) => !!entry)
                     // convert "a > b" to ["a", "b"]
                     .map((entry) => splitByCharacterUnlessQuoted(entry, '>'));
 
-            const possibleElementsIndex = splitSelector.length - 1;
-            const lastSplitPart = splitSelector[possibleElementsIndex][splitSelector[possibleElementsIndex].length - 1];
-            const possibleElements = collectAllElementsDeep(lastSplitPart, root, allElements);
-            const findElements = findMatchingElement(splitSelector, possibleElementsIndex, root);
-            if (findMany) {
-                acc = acc.concat(possibleElements.filter(findElements));
-                return acc;
-            } else {
-                acc = possibleElements.find(findElements);
-                return acc || null;
-            }
-        }, findMany ? [] : null);
-
-
+                const possibleElementsIndex = splitSelector.length - 1;
+                const lastSplitPart = splitSelector[possibleElementsIndex][splitSelector[possibleElementsIndex].length - 1];
+                const possibleElements = collectAllElementsDeep(lastSplitPart, root, allElements);
+                const findElements = findMatchingElement(splitSelector, possibleElementsIndex, root);
+                if (findMany) {
+                    acc = acc.concat(possibleElements.filter(findElements));
+                    return acc;
+                } else {
+                    acc = possibleElements.find(findElements);
+                    return acc || null;
+                }
+            },
+            findMany ? [] : null
+        );
     } else {
         if (!findMany) {
             return lightElement;
         } else {
-            return root.querySelectorAll(selector);
+            return root.querySelectorAllNative(selector);
         }
     }
-
 }
 
 function findMatchingElement(splitSelector, possibleElementsIndex, root) {
@@ -86,7 +108,7 @@ function findMatchingElement(splitSelector, possibleElementsIndex, root) {
             } else {
                 // selector is in the format "a > b"
                 // make sure a few parents match in order
-                const reversedParts = ([]).concat(splitSelector[position]).reverse();
+                const reversedParts = [].concat(splitSelector[position]).reverse();
                 let newParent = parent;
                 for (const part of reversedParts) {
                     if (!newParent || !newParent.matches(part)) {
@@ -108,25 +130,26 @@ function findMatchingElement(splitSelector, possibleElementsIndex, root) {
         }
         return foundElement;
     };
-
 }
 
 function splitByCharacterUnlessQuoted(selector, character) {
-    return selector.match(/\\?.|^$/g).reduce((p, c) => {
-        if (c === '"' && !p.sQuote) {
-            p.quote ^= 1;
-            p.a[p.a.length - 1] += c;
-        } else if (c === '\'' && !p.quote) {
-            p.sQuote ^= 1;
-            p.a[p.a.length - 1] += c;
-
-        } else if (!p.quote && !p.sQuote && c === character) {
-            p.a.push('');
-        } else {
-            p.a[p.a.length - 1] += c;
-        }
-        return p;
-    }, { a: [''] }).a;
+    return selector.match(/\\?.|^$/g).reduce(
+        (p, c) => {
+            if (c === '"' && !p.sQuote) {
+                p.quote ^= 1;
+                p.a[p.a.length - 1] += c;
+            } else if (c === "'" && !p.quote) {
+                p.sQuote ^= 1;
+                p.a[p.a.length - 1] += c;
+            } else if (!p.quote && !p.sQuote && c === character) {
+                p.a.push('');
+            } else {
+                p.a[p.a.length - 1] += c;
+            }
+            return p;
+        },
+        { a: [''] }
+    ).a;
 }
 
 /**
@@ -140,7 +163,7 @@ function isDocumentNode(node) {
 
 function findParentOrHost(element, root) {
     const parentNode = element.parentNode;
-    return (parentNode && parentNode.host && parentNode.nodeType === 11) ? parentNode.host : parentNode === root ? null : parentNode;
+    return parentNode && parentNode.host && parentNode.nodeType === 11 ? parentNode.host : parentNode === root ? null : parentNode;
 }
 
 /**
@@ -156,21 +179,23 @@ export function collectAllElementsDeep(selector = null, root, cachedElements = n
     if (cachedElements) {
         allElements = cachedElements;
     } else {
-        const findAllElements = function(nodes) {
+        const findAllElements = function (nodes) {
             for (let i = 0; i < nodes.length; i++) {
                 const el = nodes[i];
                 allElements.push(el);
                 // If the element has a shadow root, dig deeper.
                 if (el.shadowRoot) {
-                    findAllElements(el.shadowRoot.querySelectorAll('*'));
+                    findAllElements(el.shadowRoot.querySelectorAllNative('*'));
                 }
             }
         };
-        if(root.shadowRoot) {
-            findAllElements(root.shadowRoot.querySelectorAll('*'));
+
+        if (root.shadowRoot) {
+            findAllElements(root.shadowRoot.querySelectorAllNative('*'));
         }
-        findAllElements(root.querySelectorAll('*'));
+
+        findAllElements(root.querySelectorAllNative('*'));
     }
 
-    return selector ? allElements.filter(el => el.matches(selector)) : allElements;	}
-
+    return selector ? allElements.filter((el) => el.matches(selector)) : allElements;
+}
